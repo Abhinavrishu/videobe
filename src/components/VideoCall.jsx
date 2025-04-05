@@ -6,9 +6,9 @@ const VideoCall = () => {
   const { roomId } = useParams();
   const { socket } = useSocket();
   const localVideoRef = useRef(null);
-  const [remoteVideos, setRemoteVideos] = useState({});
   const peersRef = useRef({});
   const [stream, setStream] = useState(null);
+  const [remoteVideos, setRemoteVideos] = useState({});
 
   useEffect(() => {
     const init = async () => {
@@ -21,14 +21,11 @@ const VideoCall = () => {
     };
 
     init();
-
-    return () => {
-      endCall();
-    };
+    return () => endCall();
   }, []);
 
   useEffect(() => {
-    if (!stream) return;
+    if (!stream || !socket) return;
 
     socket.emit("join", { roomId });
 
@@ -40,7 +37,6 @@ const VideoCall = () => {
 
     socket.on("user-joined", async (userId) => {
       console.log("User joined:", userId);
-      // wait for offer
     });
 
     socket.on("offer", async ({ sdp, sender }) => {
@@ -83,7 +79,7 @@ const VideoCall = () => {
       socket.off("ice-candidate");
       socket.off("user-left");
     };
-  }, [stream]);
+  }, [stream, socket]);
 
   const createInitiatorPeer = async (userId) => {
     const peer = new RTCPeerConnection({
@@ -99,15 +95,11 @@ const VideoCall = () => {
     };
 
     peer.ontrack = (event) => {
-      setRemoteVideos((prev) => ({
-        ...prev,
-        [userId]: event.streams[0],
-      }));
+      setRemoteVideos((prev) => ({ ...prev, [userId]: event.streams[0] }));
     };
 
     const offer = await peer.createOffer();
     await peer.setLocalDescription(offer);
-
     socket.emit("offer", { target: userId, sdp: offer });
     peersRef.current[userId] = peer;
   };
@@ -126,10 +118,7 @@ const VideoCall = () => {
     };
 
     peer.ontrack = (event) => {
-      setRemoteVideos((prev) => ({
-        ...prev,
-        [userId]: event.streams[0],
-      }));
+      setRemoteVideos((prev) => ({ ...prev, [userId]: event.streams[0] }));
     };
 
     peersRef.current[userId] = peer;
@@ -162,9 +151,7 @@ const VideoCall = () => {
           className="remote-video"
         />
       ))}
-      <button onClick={endCall} className="cut-button">
-        End Call
-      </button>
+      <button onClick={endCall} className="cut-button">End Call</button>
     </div>
   );
 };

@@ -1,14 +1,20 @@
-import React, { useMemo, createContext, useContext } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { io } from "socket.io-client";
 
-const SocketContext = createContext(null);
+const SocketContext = createContext();
+
 export const useSocket = () => useContext(SocketContext);
 
 export const SocketProvider = ({ children }) => {
-  const socket = useMemo(() =>io("https://videobackend-n9ro.onrender.com", {
-    transports: ["websocket"],
-  })
-  , []);
+  const [socket, setSocket] = useState(null);
+
+  useEffect(() => {
+    const newSocket = io("https://videobackend-n9ro.onrender.com"); // change if deployed
+    setSocket(newSocket);
+
+    return () => newSocket.disconnect();
+  }, []);
+
   return (
     <SocketContext.Provider value={{ socket }}>
       {children}
