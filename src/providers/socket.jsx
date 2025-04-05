@@ -9,7 +9,9 @@ export const SocketProvider = ({ children }) => {
   const [socket, setSocket] = useState(null);
 
   useEffect(() => {
-    const newSocket = io("https://videofe.onrender.com"); // Replace with your server URL
+   const newSocket = io("https://videofe.onrender.com", {
+    withCredentials: true,
+  });// Replace with your server URL
     setSocket(newSocket);
 
     return () => newSocket.close();
