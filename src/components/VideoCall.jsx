@@ -8,7 +8,7 @@ const VideoCall = () => {
   const localVideoRef = useRef(null);
   const peersRef = useRef({});
   const [stream, setStream] = useState(null);
-  const [remoteVideos, setRemoteVideos] = useState({});
+  const [remoteStreams, setRemoteStreams] = useState({});
 
   useEffect(() => {
     const init = async () => {
@@ -31,16 +31,16 @@ const VideoCall = () => {
 
     socket.on("all-users", async (users) => {
       for (const userId of users) {
-        await createInitiatorPeer(userId);
+        await createOffer(userId);
       }
     });
 
     socket.on("user-joined", async (userId) => {
-      console.log("User joined:", userId);
+      console.log("🔔 User joined:", userId);
     });
 
     socket.on("offer", async ({ sdp, sender }) => {
-      const peer = await createReceiverPeer(sender);
+      const peer = createPeer(sender);
       await peer.setRemoteDescription(new RTCSessionDescription(sdp));
       const answer = await peer.createAnswer();
       await peer.setLocalDescription(answer);
@@ -49,7 +49,9 @@ const VideoCall = () => {
 
     socket.on("answer", async ({ sdp, sender }) => {
       const peer = peersRef.current[sender];
-      if (peer) await peer.setRemoteDescription(new RTCSessionDescription(sdp));
+      if (peer) {
+        await peer.setRemoteDescription(new RTCSessionDescription(sdp));
+      }
     });
 
     socket.on("ice-candidate", async ({ candidate, sender }) => {
@@ -63,7 +65,7 @@ const VideoCall = () => {
       if (peersRef.current[userId]) {
         peersRef.current[userId].close();
         delete peersRef.current[userId];
-        setRemoteVideos((prev) => {
+        setRemoteStreams((prev) => {
           const updated = { ...prev };
           delete updated[userId];
           return updated;
@@ -81,58 +83,46 @@ const VideoCall = () => {
     };
   }, [stream, socket]);
 
-  const createInitiatorPeer = async (userId) => {
+  const createPeer = (userId) => {
     const peer = new RTCPeerConnection({
       iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
     });
 
     stream.getTracks().forEach((track) => peer.addTrack(track, stream));
 
-    peer.onicecandidate = (e) => {
-      if (e.candidate) {
-        socket.emit("ice-candidate", { target: userId, candidate: e.candidate });
+    peer.onicecandidate = (event) => {
+      if (event.candidate) {
+        socket.emit("ice-candidate", {
+          target: userId,
+          candidate: event.candidate,
+        });
       }
     };
 
     peer.ontrack = (event) => {
-      setRemoteVideos((prev) => ({ ...prev, [userId]: event.streams[0] }));
-    };
-
-    const offer = await peer.createOffer();
-    await peer.setLocalDescription(offer);
-    socket.emit("offer", { target: userId, sdp: offer });
-    peersRef.current[userId] = peer;
-  };
-
-  const createReceiverPeer = async (userId) => {
-    const peer = new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-    });
-
-    stream.getTracks().forEach((track) => peer.addTrack(track, stream));
-
-    peer.onicecandidate = (e) => {
-      if (e.candidate) {
-        socket.emit("ice-candidate", { target: userId, candidate: e.candidate });
-      }
-    };
-
-    peer.ontrack = (event) => {
-      setRemoteVideos((prev) => ({ ...prev, [userId]: event.streams[0] }));
+      setRemoteStreams((prev) => ({
+        ...prev,
+        [userId]: event.streams[0],
+      }));
     };
 
     peersRef.current[userId] = peer;
     return peer;
   };
 
+  const createOffer = async (userId) => {
+    const peer = createPeer(userId);
+    const offer = await peer.createOffer();
+    await peer.setLocalDescription(offer);
+    socket.emit("offer", { target: userId, sdp: offer });
+  };
+
   const endCall = () => {
     Object.values(peersRef.current).forEach((peer) => peer.close());
     peersRef.current = {};
-    setRemoteVideos({});
+    setRemoteStreams({});
     if (localVideoRef.current?.srcObject) {
-      localVideoRef.current.srcObject.getTracks().forEach((track) =>
-        track.stop()
-      );
+      localVideoRef.current.srcObject.getTracks().forEach((track) => track.stop());
       localVideoRef.current.srcObject = null;
     }
   };
@@ -140,7 +130,7 @@ const VideoCall = () => {
   return (
     <div className="video-container">
       <video ref={localVideoRef} autoPlay muted className="local-video" />
-      {Object.entries(remoteVideos).map(([id, stream]) => (
+      {Object.entries(remoteStreams).map(([id, stream]) => (
         <video
           key={id}
           autoPlay
@@ -151,7 +141,9 @@ const VideoCall = () => {
           className="remote-video"
         />
       ))}
-      <button onClick={endCall} className="cut-button">End Call</button>
+      <button onClick={endCall} className="cut-button">
+        End Call
+      </button>
     </div>
   );
 };
