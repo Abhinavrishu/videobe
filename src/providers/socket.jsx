@@ -5,7 +5,7 @@ const SocketContext = createContext(null);
 export const useSocket = () => useContext(SocketContext);
 
 export const SocketProvider = ({ children }) => {
-  const socket = useMemo(() => io("http://localhost:8001"), []);
+  const socket = useMemo(() => io("https://videobackend-n9ro.onrender.com"), []);
   return (
     <SocketContext.Provider value={{ socket }}>
       {children}
